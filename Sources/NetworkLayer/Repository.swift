@@ -1,0 +1,121 @@
+//
+//  Repository.swift
+//  NetworkLayer
+//
+//  Created by Philippe Blanchette on 2025-08-08.
+//
+
+import os
+import Foundation
+
+public enum RepositoryError: Error {
+    case networkError
+    case decodingError
+}
+
+public protocol Repository<Request, Response>: Sendable {
+    associatedtype Request: Hashable & Sendable
+    associatedtype Response: Sendable & Decodable
+    
+    func fetch(_ request: Request) async throws -> Data
+    func decode(_ data: Data) async throws -> Response
+}
+
+typealias RepositoryResponse = Sendable & Decodable
+
+extension URLRequest: Sendable {}
+
+final class RepositoryBuilder<DTO: Decodable & Sendable> {
+    
+    static func fullOnBuilder() -> any Repository<URLRequest, DTO> {
+        let base = RequestRepository<DTO>()
+        let loggable = LoggingRepo(base: base, name: "request repository")
+        let cancellable = CancellableRemoteRepository(base: loggable)
+        return cancellable
+    }
+}
+
+private actor RequestRepository<U: RepositoryResponse>: Repository {
+    typealias Request = URLRequest
+    typealias Response = U
+    
+    func fetch(_ request: Request) async throws -> Data {
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse, (200...299).contains(httpResponse.statusCode) else {
+            throw RepositoryError.networkError
+        }
+        
+        return data
+    }
+    
+    func decode(_ data: Data) async throws -> U {
+        do {
+            return try JSONDecoder().decode(Self.Response.self, from: data)
+        } catch {
+            throw RepositoryError.decodingError
+        }
+    }
+}
+
+private actor CancellableRemoteRepository<Base: Repository>: Repository {
+    
+    typealias Request = Base.Request
+    typealias Response = Base.Response
+    
+    private let base: Base
+    private var inFlight: [Request: Task<Data, Error>] = [:]
+    
+    init(base: Base) {
+        self.base = base
+    }
+    
+    func fetch(_ request: Request) async throws -> Data {
+        // cancel previous
+        inFlight[request]?.cancel()
+
+        let t = Task { [base] in try await base.fetch(request) }
+        inFlight[request] = t
+        defer { inFlight[request] = nil }
+        return try await t.value
+    }
+    
+    func decode(_ data: Data) async throws -> Base.Response {
+        return try await base.decode(data)
+    }
+    
+    func cancel(_ request: Request) {
+        inFlight[request]?.cancel()
+        inFlight[request] = nil
+    }
+}
+
+private actor LoggingRepo<Base: Repository>: Repository {
+    typealias Request = Base.Request
+    typealias Response = Base.Response
+    
+    private let base: Base
+    
+    private let logger: Logger
+    
+    init(base: Base, name: String) {
+        self.base = base
+        self.logger = Logger(subsystem: name, category: "network")
+    }
+    
+    func fetch(_ request: Base.Request) async throws -> Data {
+        self.logger.info("starting the fetching of the data")
+        do {
+            let out = try await base.fetch(request)
+            self.logger.info("done fetching of the data")
+            return out
+        } catch {
+            self.logger.error("error while fetching the data in repo: \(error)")
+            throw error
+        }
+    }
+    
+    func decode(_ data: Data) async throws -> Base.Response {
+        try await base.decode(data)
+    }
+}
