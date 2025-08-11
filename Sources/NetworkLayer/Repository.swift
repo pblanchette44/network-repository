@@ -25,7 +25,7 @@ typealias RepositoryResponse = Sendable & Decodable
 
 extension URLRequest: Sendable {}
 
-final class RepositoryBuilder<DTO: Decodable & Sendable> {
+class RepositoryBuilder<DTO: Decodable & Sendable> {
     
     static func fullOnBuilder() -> any Repository<URLRequest, DTO> {
         let base = RequestRepository<DTO>()
