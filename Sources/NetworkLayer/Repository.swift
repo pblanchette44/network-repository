@@ -27,7 +27,7 @@ extension URLRequest: Sendable {}
 
 public class RepositoryBuilder<DTO: Decodable & Sendable> {
     
-    static func fullOnBuilder() -> any Repository<URLRequest, DTO> {
+    public static func fullOnBuilder() -> any Repository<URLRequest, DTO> {
         let base = RequestRepository<DTO>()
         let loggable = LoggingRepo(base: base, name: "request repository")
         let cancellable = CancellableRemoteRepository(base: loggable)
