@@ -29,8 +29,8 @@ public protocol RequestSpecs: Sendable {
 
 public extension RequestSpecs {
     
-    var query: [String: String] {
-        [:]
+    var query: [String: String]? {
+        nil
     }
     
     var headers: [String: String]? {
