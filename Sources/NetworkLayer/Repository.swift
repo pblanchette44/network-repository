@@ -25,12 +25,17 @@ typealias RepositoryResponse = Sendable & Decodable
 
 extension URLRequest: Sendable {}
 
+/// Repository Builder is used to init Repository objects
+///
+/// extend it to create custom builders
 public class RepositoryBuilder<DTO: Decodable & Sendable> {
     
+    /// returns a Repository which provides remote data fetching, logging and cancellation logic
     public static func fullOnBuilder() -> any Repository<URLRequest, DTO> {
         let base = RequestRepository<DTO>()
-        let loggable = LoggingRepo(base: base, name: "request repository")
+        let loggable = LoggingRepo(base: base, name: "RequestRepository<\(DTO.self)>")
         let cancellable = CancellableRemoteRepository(base: loggable)
+        let loggableCancellable = LoggingRepo(base: cancellable, name: "CancellableRepository<\(DTO.self)>")
         return cancellable
     }
 }
@@ -97,20 +102,28 @@ private actor LoggingRepo<Base: Repository>: Repository {
     private let base: Base
     
     private let logger: Logger
+    private let name: String
+    
+    private var prefix: String {
+        "\(name)::"
+    }
     
     init(base: Base, name: String) {
         self.base = base
-        self.logger = Logger(subsystem: name, category: "network")
+        
+        self.logger = Logger(subsystem: "NetworkLayer", category: "Repository::\(name)")
+        self.name = name
     }
     
     func fetch(_ request: Base.Request) async throws -> Data {
-        self.logger.info("starting the fetching of the data")
+
+        self.logger.info("\(self.prefix)starting the fetching of the data")
         do {
             let out = try await base.fetch(request)
-            self.logger.info("done fetching of the data")
+            self.logger.info("\(self.prefix)done fetching of the data")
             return out
         } catch {
-            self.logger.error("error while fetching the data in repo: \(error)")
+            self.logger.error("\(self.prefix)error while fetching the data in repo: \(error)")
             throw error
         }
     }
