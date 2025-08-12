@@ -37,6 +37,20 @@ public class RepositoryBuilder<DTO: Decodable & Sendable> {
         let cancellable = CancellableRemoteRepository(base: loggable)
         return cancellable
     }
+    
+    /// returns a repository with a basic in memory cache
+    public static func cacheableBuilder(nameSpace: String) -> any Repository<URLRequest, DTO> {
+        let base = RequestRepository<DTO>()
+        let loggable = LoggingRepo(base: base, name: "RequestRepository<\(DTO.self)>")
+        let cacheable = CacheableRepository(
+            base: loggable,
+            cache: MemoryCacheStore(),
+            policy: .cacheFirst(ttl: 60, staleWhileRevalidate: 300),
+            nameSpace: nameSpace
+        )
+        let cancellable = CancellableRemoteRepository(base: cacheable)
+        return cancellable
+    }
 }
 
 private actor RequestRepository<U: RepositoryResponse>: Repository {
