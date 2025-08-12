@@ -9,8 +9,8 @@ import os
 import Foundation
 
 public enum RepositoryError: Error {
-    case networkError
-    case decodingError
+    case networkError(Error?)
+    case decodingError(Error)
 }
 
 public protocol Repository<Request, Response>: Sendable {
@@ -44,20 +44,27 @@ private actor RequestRepository<U: RepositoryResponse>: Repository {
     typealias Response = U
     
     func fetch(_ request: Request) async throws -> Data {
-        let (data, response) = try await URLSession.shared.data(for: request)
         
-        guard let httpResponse = response as? HTTPURLResponse, (200...299).contains(httpResponse.statusCode) else {
-            throw RepositoryError.networkError
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            
+            guard let httpResponse = response as? HTTPURLResponse, (200...299).contains(httpResponse.statusCode) else {
+                throw RepositoryError.networkError(nil)
+            }
+            
+            return data
+        } catch {
+            throw RepositoryError.networkError(error)
         }
+
         
-        return data
     }
     
     func decode(_ data: Data) async throws -> U {
         do {
             return try JSONDecoder().decode(Self.Response.self, from: data)
         } catch {
-            throw RepositoryError.decodingError
+            throw RepositoryError.decodingError(error)
         }
     }
 }
