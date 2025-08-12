@@ -35,7 +35,6 @@ public class RepositoryBuilder<DTO: Decodable & Sendable> {
         let base = RequestRepository<DTO>()
         let loggable = LoggingRepo(base: base, name: "RequestRepository<\(DTO.self)>")
         let cancellable = CancellableRemoteRepository(base: loggable)
-        let loggableCancellable = LoggingRepo(base: cancellable, name: "CancellableRepository<\(DTO.self)>")
         return cancellable
     }
 }
@@ -120,7 +119,7 @@ private actor LoggingRepo<Base: Repository>: Repository {
         self.logger.info("\(self.prefix)starting the fetching of the data")
         do {
             let out = try await base.fetch(request)
-            self.logger.info("\(self.prefix)done fetching of the data")
+            self.logger.info("\(self.prefix)done fetching the data")
             return out
         } catch {
             self.logger.error("\(self.prefix)error while fetching the data in repo: \(error)")
